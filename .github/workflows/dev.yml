@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Databricks CLI
-        uses: databricks/setup-cli@v0.269.0
+        uses: databricks/setup-cli@main
 
       - name: Setup Python
         uses: actions/setup-python@v5
