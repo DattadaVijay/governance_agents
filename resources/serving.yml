@@ -5,14 +5,12 @@ resources:
 
       config:
         served_entities:
-          - entity_name: "governance.default.data_governance_agent"
-            entity_version: "1"
+          - entity_name:          "governance.default.data_governance_agent"
+            entity_version:       "1"
             scale_to_zero_enabled: true
-            workload_size: "Small"
-
-      env_vars:
-        - name:  "GROQ_API_KEY"
-          value: "{{secrets/agents_scope/grok_key}}"
+            workload_size:        "Small"
+            environment_vars:
+              GROQ_API_KEY: "{{secrets/agents_scope/grok_key}}"
 
       tags:
         - key:   "team"
