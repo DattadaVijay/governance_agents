@@ -21,7 +21,7 @@ from mlflow.types.schema import Schema, ColSpec
 CATALOG    = "governance"
 SCHEMA     = "default"
 MODEL_NAME = f"{CATALOG}.{SCHEMA}.data_governance_agent"
-AGENT_PATH = "./src/agent.py"
+AGENT_PATH = "./agent.py"
 
 os.environ["GROQ_API_KEY"] = dbutils.secrets.get("agents_scope", "grok_key")
 
