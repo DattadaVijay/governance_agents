@@ -47,7 +47,7 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
 
         # ── LLM — tool use optimised model ───────────────────────
         llm = ChatGroq(
-            model="llama3-groq-70b-8192-tool-use-preview",
+            model="llama-3.3-70b-versatile",
             api_key=groq_api_key,
             temperature=0
         )
