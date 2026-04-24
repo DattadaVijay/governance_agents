@@ -1,7 +1,12 @@
 # Databricks notebook source
 
-# MAGIC %pip install langchain langchain-groq langgraph
+# MAGIC %pip install \
+# MAGIC     langchain==0.3.14 \
+# MAGIC     langchain-core==0.3.28 \
+# MAGIC     langchain-groq==0.2.3 \
+# MAGIC     langgraph==0.2.60
 # MAGIC dbutils.library.restartPython()
+
 
 # COMMAND ----------
 
