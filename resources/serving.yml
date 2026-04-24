@@ -1,0 +1,26 @@
+resources:
+  model_serving_endpoints:
+    data_governance_agent:
+      name: "data-governance-agent-${bundle.target}"
+
+      config:
+        served_entities:
+          - entity_name: "governance.default.data_governance_agent"
+            entity_version: "1"
+            scale_to_zero_enabled: true
+            workload_size: "Small"
+        
+        auto_capture_config:
+          catalog_name: "governance"
+          schema_name:  "default"
+          table_name_prefix: "governance_agent_inference"
+
+      environment_vars:
+        - name:  "GROQ_API_KEY"
+          value: "{{secrets/agents_scope/grok_key}}"
+
+      tags:
+        - key:   "team"
+          value: "data-engineering"
+        - key:   "env"
+          value: "${bundle.target}"

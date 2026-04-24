@@ -125,9 +125,6 @@ print("✅ Model loaded")
 questions = [
     ("What is the job ID of dev_dattada_vijayyml_job_deploy?",   "session_001"),
     ("Who created job 780838995876631?",                          "session_001"),
-    ("What is the status of job 780838995876631?",                "session_001"),
-    ("Show me the last 3 runs of job 780838995876631?",           "session_001"),
-    ("What tasks does job 780838995876631 have?",                 "session_001"),
 ]
 
 for question, thread_id in questions:
