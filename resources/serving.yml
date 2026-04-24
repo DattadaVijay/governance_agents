@@ -11,7 +11,6 @@ resources:
             workload_size:        "Small"
             environment_vars:
               GROQ_API_KEY: "{{secrets/agents_scope/grok_key}}"
-
       tags:
         - key:   "team"
           value: "data-engineering"
