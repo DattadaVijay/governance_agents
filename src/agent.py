@@ -2,6 +2,19 @@
 
 # COMMAND ----------
 
+import subprocess
+import sys
+
+subprocess.check_call([
+    sys.executable, "-m", "pip", "install", "-q",
+    "langchain==0.3.7",
+    "langchain-core==0.3.15",
+    "langchain-groq==0.2.1",
+    "langgraph==0.2.45"
+])
+
+# COMMAND ----------
+
 import os
 import mlflow
 import mlflow.pyfunc
@@ -12,6 +25,7 @@ from langchain_groq import ChatGroq
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
+
 
 
 class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
