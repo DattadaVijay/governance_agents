@@ -465,7 +465,10 @@ If a question needs multiple tools use them in sequence."""
         for i, row in model_input.iterrows():
             question  = row["question"]
             thread_id = row.get("thread_id", "default")
-            config    = {"configurable": {"thread_id": thread_id}}
+            config    = {
+                "configurable": {"thread_id": thread_id},
+                "recursion_limit": 10
+            }
 
             try:
                 response = self.agent.invoke(
