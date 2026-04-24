@@ -1,5 +1,12 @@
 # Databricks notebook source
 
+# MAGIC %pip install \
+# MAGIC     "langchain==0.3.7" \
+# MAGIC     "langchain-core==0.3.15" \
+# MAGIC     "langchain-groq==0.2.1" \
+# MAGIC     "langgraph==0.2.45"
+# MAGIC dbutils.library.restartPython()
+
 # COMMAND ----------
 
 import mlflow
@@ -11,18 +18,15 @@ from mlflow.types.schema import Schema, ColSpec
 
 # COMMAND ----------
 
-# ── Config ────────────────────────────────────────────────────────
 CATALOG    = "governance"
 SCHEMA     = "default"
 MODEL_NAME = f"{CATALOG}.{SCHEMA}.data_governance_agent"
-AGENT_PATH = "./agent.py"
+AGENT_PATH = "./src/agent.py"
 
-# ── Set GROQ key so load_context works during local test ──────────
 os.environ["GROQ_API_KEY"] = dbutils.secrets.get("agents_scope", "grok_key")
 
 # COMMAND ----------
 
-# ── MLflow experiment ─────────────────────────────────────────────
 mlflow.set_registry_uri("databricks-uc")
 mlflow.set_experiment(
     "/Users/dattada.vijay@gmail.com/data_governance_agent"
@@ -30,7 +34,6 @@ mlflow.set_experiment(
 
 # COMMAND ----------
 
-# ── Signature ─────────────────────────────────────────────────────
 signature = ModelSignature(
     inputs=Schema([
         ColSpec("string", "question"),
@@ -41,7 +44,6 @@ signature = ModelSignature(
     ])
 )
 
-# ── Input example ─────────────────────────────────────────────────
 input_example = pd.DataFrame({
     "question":  ["What is the status of job 780838995876631?"],
     "thread_id": ["session_001"]
@@ -49,7 +51,6 @@ input_example = pd.DataFrame({
 
 # COMMAND ----------
 
-# ── Log model ─────────────────────────────────────────────────────
 with mlflow.start_run(run_name="data_governance_agent_v1") as run:
 
     mlflow.pyfunc.log_model(
@@ -58,41 +59,25 @@ with mlflow.start_run(run_name="data_governance_agent_v1") as run:
         input_example=input_example,
         signature=signature,
         pip_requirements=[
-            "langchain",
-            "langchain-groq",
-            "langgraph",
+            "langchain==0.3.7",
+            "langchain-core==0.3.15",
+            "langchain-groq==0.2.1",
+            "langgraph==0.2.45",
         ]
     )
 
     run_id = run.info.run_id
-    print(f"✅ Model logged")
-    print(f"   Run ID:    {run_id}")
-    print(f"   Model URI: runs:/{run_id}/data_governance_agent")
+    print(f"✅ Model logged | Run ID: {run_id}")
 
 # COMMAND ----------
 
-# ── Register to Unity Catalog ─────────────────────────────────────
 registered = mlflow.register_model(
     model_uri=f"runs:/{run_id}/data_governance_agent",
     name=MODEL_NAME
 )
 
-print(f"✅ Registered: {MODEL_NAME}")
-print(f"   Version:    {registered.version}")
+print(f"✅ Registered: {MODEL_NAME} v{registered.version}")
 
-# COMMAND ----------
-
-# ── Set alias ─────────────────────────────────────────────────────
-client = mlflow.tracking.MlflowClient()
-
-client.set_registered_model_alias(
-    name=MODEL_NAME,
-    alias="champion",
-    version=registered.version
-)
-
-print(f"✅ Alias 'champion' → v{registered.version}")
-print(f"   Load URI: models:/{MODEL_NAME}@champion")
 
 # COMMAND ----------
 
