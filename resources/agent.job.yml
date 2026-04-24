@@ -1,22 +1,15 @@
-# The main job for agentic_ai_databricks.
 resources:
   jobs:
-    databricks_governance_job:
-      name: governance_job
+    governance_job: 
+      name: "Governance Agent Pipeline"
 
       tasks:
-        - task_key: Deploying the agent
+        - task_key: deploy_agent
           notebook_task:
             notebook_path: ../src/agent.py
 
-        - task_key: Registring the model
-          depends_on: 
-            - task_key: Deploying the agent
+        - task_key: register_model
+          depends_on:
+            - task_key: deploy_agent
           notebook_task:
-            notebook_path: "../src/model_register.py"
-
-
-          
-
-
-
+            notebook_path: ../src/model_register.py
