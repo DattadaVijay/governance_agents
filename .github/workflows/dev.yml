@@ -1,0 +1,36 @@
+name: Databricks CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy_dev:
+    runs-on: ubuntu-latest
+
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Databricks CLI
+        uses: databricks/setup-cli@v0.269.0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate bundle
+        run: databricks bundle validate --target dev
+
+      - name: Deploy bundle
+        run: databricks bundle deploy --target dev --auto-approve
+
+      - name: Run job
+        run: databricks bundle run governance_job --target dev
