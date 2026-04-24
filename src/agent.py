@@ -1,13 +1,5 @@
 # Databricks notebook source
 
-# MAGIC %pip install \
-# MAGIC     "langchain==0.3.7" \
-# MAGIC     "langchain-core==0.3.15" \
-# MAGIC     "langchain-groq==0.2.1" \
-# MAGIC     "langgraph==0.2.45"
-# MAGIC dbutils.library.restartPython()
-
-
 # COMMAND ----------
 
 import os
@@ -30,6 +22,7 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
         All tools, LLM and agent initialised here.
         """
 
+        # ── API Key ───────────────────────────────────────────────
         groq_api_key = os.environ.get("GROQ_API_KEY")
 
         if not groq_api_key:
@@ -38,12 +31,14 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
                 "Set it in .env or serving endpoint config."
             )
 
+        # ── LLM — tool use optimised model ───────────────────────
         llm = ChatGroq(
-            model="llama-3.3-70b-versatile",
+            model="llama3-groq-70b-8192-tool-use-preview",
             api_key=groq_api_key,
             temperature=0
         )
 
+        # ── Windows ───────────────────────────────────────────────
         job_window  = Window.partitionBy("job_id").orderBy(
             F.col("change_time").desc()
         )
@@ -64,16 +59,19 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
             Args:
                 job_name: exact full name of the job
             """
-            rows = spark.table("system.lakeflow.jobs") \
-                        .withColumn("rn", F.row_number().over(job_window)) \
-                        .filter(F.col("rn") == 1) \
-                        .filter(F.col("name") == job_name) \
-                        .select("job_id") \
-                        .collect()
+            try:
+                rows = spark.table("system.lakeflow.jobs") \
+                            .withColumn("rn", F.row_number().over(job_window)) \
+                            .filter(F.col("rn") == 1) \
+                            .filter(F.col("name") == job_name) \
+                            .select("job_id") \
+                            .collect()
 
-            if not rows:
-                return f"No job found with name '{job_name}'"
-            return str(rows[0]["job_id"])
+                if not rows:
+                    return f"No job found with name '{job_name}'"
+                return str(rows[0]["job_id"])
+            except Exception as e:
+                return f"Error looking up job: {str(e)}"
 
         # ── Tool 2 — get_job_creator ──────────────────────────────
         @tool
@@ -85,28 +83,31 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
             Args:
                 job_id: the Databricks job ID
             """
-            rows = spark.table("system.lakeflow.jobs") \
-                        .withColumn("rn", F.row_number().over(job_window)) \
-                        .filter(F.col("rn") == 1) \
-                        .filter(F.col("job_id") == job_id) \
-                        .select(
-                            "creator_user_name",
-                            "run_as_user_name",
-                            "creator_id"
-                        ) \
-                        .collect()
+            try:
+                rows = spark.table("system.lakeflow.jobs") \
+                            .withColumn("rn", F.row_number().over(job_window)) \
+                            .filter(F.col("rn") == 1) \
+                            .filter(F.col("job_id") == job_id) \
+                            .select(
+                                "creator_user_name",
+                                "run_as_user_name",
+                                "creator_id"
+                            ) \
+                            .collect()
 
-            if not rows:
-                return f"No job found with ID '{job_id}'"
+                if not rows:
+                    return f"No job found with ID '{job_id}'"
 
-            row     = rows[0]
-            creator = (
-                row["creator_user_name"] or
-                row["run_as_user_name"]  or
-                row["creator_id"]        or
-                "Unknown"
-            )
-            return f"Job {job_id} was created by: {creator}"
+                row     = rows[0]
+                creator = (
+                    row["creator_user_name"] or
+                    row["run_as_user_name"]  or
+                    row["creator_id"]        or
+                    "Unknown"
+                )
+                return f"Job {job_id} was created by: {creator}"
+            except Exception as e:
+                return f"Error looking up creator: {str(e)}"
 
         # ── Tool 3 — get_job_status ───────────────────────────────
         @tool
@@ -118,34 +119,37 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
             Args:
                 job_id: the Databricks job ID
             """
-            rows = spark.table("system.lakeflow.job_run_timeline") \
-                        .filter(F.col("job_id") == job_id) \
-                        .orderBy(F.col("period_start_time").desc()) \
-                        .limit(1) \
-                        .select(
-                            "run_id",
-                            "result_state",
-                            "trigger_type",
-                            "period_start_time",
-                            "period_end_time",
-                            "run_duration_seconds"
-                        ) \
-                        .collect()
+            try:
+                rows = spark.table("system.lakeflow.job_run_timeline") \
+                            .filter(F.col("job_id") == job_id) \
+                            .orderBy(F.col("period_start_time").desc()) \
+                            .limit(1) \
+                            .select(
+                                "run_id",
+                                "result_state",
+                                "trigger_type",
+                                "period_start_time",
+                                "period_end_time",
+                                "run_duration_seconds"
+                            ) \
+                            .collect()
 
-            if not rows:
-                return f"No runs found for job ID '{job_id}'"
+                if not rows:
+                    return f"No runs found for job ID '{job_id}'"
 
-            row      = rows[0]
-            duration = row["run_duration_seconds"] or 0
+                row      = rows[0]
+                duration = row["run_duration_seconds"] or 0
 
-            return (
-                f"Job {job_id} latest run:\n"
-                f"  Status:   {row['result_state']}\n"
-                f"  Trigger:  {row['trigger_type']}\n"
-                f"  Started:  {row['period_start_time']}\n"
-                f"  Ended:    {row['period_end_time']}\n"
-                f"  Duration: {duration}s"
-            )
+                return (
+                    f"Job {job_id} latest run:\n"
+                    f"  Status:   {row['result_state']}\n"
+                    f"  Trigger:  {row['trigger_type']}\n"
+                    f"  Started:  {row['period_start_time']}\n"
+                    f"  Ended:    {row['period_end_time']}\n"
+                    f"  Duration: {duration}s"
+                )
+            except Exception as e:
+                return f"Error getting job status: {str(e)}"
 
         # ── Tool 4 — get_job_run_history ──────────────────────────
         @tool
@@ -158,34 +162,37 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
                 job_id: the Databricks job ID
                 n: number of recent runs to return (default 5)
             """
-            rows = spark.table("system.lakeflow.job_run_timeline") \
-                        .filter(F.col("job_id") == job_id) \
-                        .orderBy(F.col("period_start_time").desc()) \
-                        .limit(n) \
-                        .select(
-                            "run_id",
-                            "result_state",
-                            "trigger_type",
-                            "period_start_time",
-                            "run_duration_seconds",
-                            "termination_code"
-                        ) \
-                        .collect()
+            try:
+                rows = spark.table("system.lakeflow.job_run_timeline") \
+                            .filter(F.col("job_id") == job_id) \
+                            .orderBy(F.col("period_start_time").desc()) \
+                            .limit(n) \
+                            .select(
+                                "run_id",
+                                "result_state",
+                                "trigger_type",
+                                "period_start_time",
+                                "run_duration_seconds",
+                                "termination_code"
+                            ) \
+                            .collect()
 
-            if not rows:
-                return f"No run history found for job ID '{job_id}'"
+                if not rows:
+                    return f"No run history found for job ID '{job_id}'"
 
-            lines = [f"Last {n} runs for job {job_id}:\n"]
-            for i, row in enumerate(rows, 1):
-                duration = row["run_duration_seconds"] or 0
-                lines.append(
-                    f"  Run {i}: {row['result_state']} | "
-                    f"Started: {row['period_start_time']} | "
-                    f"Duration: {duration}s | "
-                    f"Termination: {row['termination_code']}"
-                )
+                lines = [f"Last {n} runs for job {job_id}:\n"]
+                for i, row in enumerate(rows, 1):
+                    duration = row["run_duration_seconds"] or 0
+                    lines.append(
+                        f"  Run {i}: {row['result_state']} | "
+                        f"Started: {row['period_start_time']} | "
+                        f"Duration: {duration}s | "
+                        f"Termination: {row['termination_code']}"
+                    )
 
-            return "\n".join(lines)
+                return "\n".join(lines)
+            except Exception as e:
+                return f"Error getting run history: {str(e)}"
 
         # ── Tool 5 — get_failed_jobs ──────────────────────────────
         @tool
@@ -197,43 +204,46 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
             Args:
                 hours: how many hours to look back (default 24)
             """
-            cutoff = F.now() - F.expr(f"INTERVAL {hours} HOURS")
+            try:
+                cutoff = F.now() - F.expr(f"INTERVAL {hours} HOURS")
 
-            jobs_df = spark.table("system.lakeflow.jobs") \
-                           .withColumn("rn", F.row_number().over(job_window)) \
-                           .filter(F.col("rn") == 1) \
-                           .select("job_id", "name")
+                jobs_df = spark.table("system.lakeflow.jobs") \
+                               .withColumn("rn", F.row_number().over(job_window)) \
+                               .filter(F.col("rn") == 1) \
+                               .select("job_id", "name")
 
-            runs_df = spark.table("system.lakeflow.job_run_timeline") \
-                           .filter(
-                               F.col("result_state").isin(
-                                   "ERROR", "FAILED", "TIMEDOUT"
+                runs_df = spark.table("system.lakeflow.job_run_timeline") \
+                               .filter(
+                                   F.col("result_state").isin(
+                                       "ERROR", "FAILED", "TIMEDOUT"
+                                   )
+                               ) \
+                               .filter(F.col("period_start_time") >= cutoff) \
+                               .orderBy(F.col("period_start_time").desc()) \
+                               .select(
+                                   "job_id",
+                                   "result_state",
+                                   "period_start_time",
+                                   "termination_code"
                                )
-                           ) \
-                           .filter(F.col("period_start_time") >= cutoff) \
-                           .orderBy(F.col("period_start_time").desc()) \
-                           .select(
-                               "job_id",
-                               "result_state",
-                               "period_start_time",
-                               "termination_code"
-                           )
 
-            rows = runs_df.join(jobs_df, on="job_id", how="left").collect()
+                rows = runs_df.join(jobs_df, on="job_id", how="left").collect()
 
-            if not rows:
-                return f"No failed jobs in the last {hours} hours ✅"
+                if not rows:
+                    return f"No failed jobs in the last {hours} hours ✅"
 
-            lines = [f"Failed jobs in last {hours} hours:\n"]
-            for row in rows:
-                lines.append(
-                    f"  Job:    {row['name'] or row['job_id']}\n"
-                    f"  State:  {row['result_state']}\n"
-                    f"  At:     {row['period_start_time']}\n"
-                    f"  Reason: {row['termination_code']}\n"
-                )
+                lines = [f"Failed jobs in last {hours} hours:\n"]
+                for row in rows:
+                    lines.append(
+                        f"  Job:    {row['name'] or row['job_id']}\n"
+                        f"  State:  {row['result_state']}\n"
+                        f"  At:     {row['period_start_time']}\n"
+                        f"  Reason: {row['termination_code']}\n"
+                    )
 
-            return "\n".join(lines)
+                return "\n".join(lines)
+            except Exception as e:
+                return f"Error getting failed jobs: {str(e)}"
 
         # ── Tool 6 — check_job_sla ────────────────────────────────
         @tool
@@ -246,32 +256,35 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
                 job_id: the Databricks job ID
                 expected_seconds: maximum acceptable run duration in seconds
             """
-            rows = spark.table("system.lakeflow.job_run_timeline") \
-                        .filter(F.col("job_id") == job_id) \
-                        .filter(F.col("result_state").isNotNull()) \
-                        .orderBy(F.col("period_start_time").desc()) \
-                        .limit(1) \
-                        .select(
-                            "run_duration_seconds",
-                            "result_state",
-                            "period_start_time"
-                        ) \
-                        .collect()
+            try:
+                rows = spark.table("system.lakeflow.job_run_timeline") \
+                            .filter(F.col("job_id") == job_id) \
+                            .filter(F.col("result_state").isNotNull()) \
+                            .orderBy(F.col("period_start_time").desc()) \
+                            .limit(1) \
+                            .select(
+                                "run_duration_seconds",
+                                "result_state",
+                                "period_start_time"
+                            ) \
+                            .collect()
 
-            if not rows:
-                return f"No completed runs found for job ID '{job_id}'"
+                if not rows:
+                    return f"No completed runs found for job ID '{job_id}'"
 
-            row       = rows[0]
-            duration  = row["run_duration_seconds"] or 0
-            compliant = duration <= expected_seconds
+                row       = rows[0]
+                duration  = row["run_duration_seconds"] or 0
+                compliant = duration <= expected_seconds
 
-            return (
-                f"SLA Check for job {job_id}:\n"
-                f"  Expected:  <= {expected_seconds}s\n"
-                f"  Actual:    {duration}s\n"
-                f"  Status:    {row['result_state']}\n"
-                f"  SLA:       {'✅ COMPLIANT' if compliant else '❌ BREACHED'}"
-            )
+                return (
+                    f"SLA Check for job {job_id}:\n"
+                    f"  Expected:  <= {expected_seconds}s\n"
+                    f"  Actual:    {duration}s\n"
+                    f"  Status:    {row['result_state']}\n"
+                    f"  SLA:       {'✅ COMPLIANT' if compliant else '❌ BREACHED'}"
+                )
+            except Exception as e:
+                return f"Error checking SLA: {str(e)}"
 
         # ── Tool 7 — get_job_tasks ────────────────────────────────
         @tool
@@ -282,26 +295,29 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
             Args:
                 job_id: the Databricks job ID
             """
-            rows = spark.table("system.lakeflow.job_tasks") \
-                        .filter(F.col("job_id") == job_id) \
-                        .filter(F.col("delete_time").isNull()) \
-                        .withColumn("rn", F.row_number().over(task_window)) \
-                        .filter(F.col("rn") == 1) \
-                        .select("task_key", "depends_on_keys") \
-                        .collect()
+            try:
+                rows = spark.table("system.lakeflow.job_tasks") \
+                            .filter(F.col("job_id") == job_id) \
+                            .filter(F.col("delete_time").isNull()) \
+                            .withColumn("rn", F.row_number().over(task_window)) \
+                            .filter(F.col("rn") == 1) \
+                            .select("task_key", "depends_on_keys") \
+                            .collect()
 
-            if not rows:
-                return f"No tasks found for job ID '{job_id}'"
+                if not rows:
+                    return f"No tasks found for job ID '{job_id}'"
 
-            lines = [f"Tasks for job {job_id}:\n"]
-            for row in rows:
-                deps     = row["depends_on_keys"] or []
-                deps_str = ", ".join(deps) if deps else "none"
-                lines.append(
-                    f"  Task: {row['task_key']} | Depends on: {deps_str}"
-                )
+                lines = [f"Tasks for job {job_id}:\n"]
+                for row in rows:
+                    deps     = row["depends_on_keys"] or []
+                    deps_str = ", ".join(deps) if deps else "none"
+                    lines.append(
+                        f"  Task: {row['task_key']} | Depends on: {deps_str}"
+                    )
 
-            return "\n".join(lines)
+                return "\n".join(lines)
+            except Exception as e:
+                return f"Error getting job tasks: {str(e)}"
 
         # ── Tool 8 — get_job_schedule ─────────────────────────────
         @tool
@@ -312,47 +328,50 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
             Args:
                 job_id: the Databricks job ID
             """
-            rows = spark.table("system.lakeflow.jobs") \
-                        .filter(F.col("job_id") == job_id) \
-                        .filter(F.col("delete_time").isNull()) \
-                        .withColumn("rn", F.row_number().over(job_window)) \
-                        .filter(F.col("rn") == 1) \
-                        .select(
-                            "trigger_type",
-                            "paused",
-                            F.col("trigger.schedule.quartz_cron_expression")
-                             .alias("cron"),
-                            F.col("trigger.schedule.timezone_id")
-                             .alias("timezone"),
-                            F.col("trigger.periodic.interval")
-                             .alias("periodic_interval"),
-                            F.col("trigger.periodic.units")
-                             .alias("periodic_units")
-                        ) \
-                        .collect()
+            try:
+                rows = spark.table("system.lakeflow.jobs") \
+                            .filter(F.col("job_id") == job_id) \
+                            .filter(F.col("delete_time").isNull()) \
+                            .withColumn("rn", F.row_number().over(job_window)) \
+                            .filter(F.col("rn") == 1) \
+                            .select(
+                                "trigger_type",
+                                "paused",
+                                F.col("trigger.schedule.quartz_cron_expression")
+                                 .alias("cron"),
+                                F.col("trigger.schedule.timezone_id")
+                                 .alias("timezone"),
+                                F.col("trigger.periodic.interval")
+                                 .alias("periodic_interval"),
+                                F.col("trigger.periodic.units")
+                                 .alias("periodic_units")
+                            ) \
+                            .collect()
 
-            if not rows:
-                return f"No job found with ID '{job_id}'"
+                if not rows:
+                    return f"No job found with ID '{job_id}'"
 
-            row = rows[0]
+                row = rows[0]
 
-            if not row["trigger_type"]:
-                return f"Job {job_id} has no schedule (manual trigger only)"
+                if not row["trigger_type"]:
+                    return f"Job {job_id} has no schedule (manual trigger only)"
 
-            lines = [f"Schedule for job {job_id}:"]
-            lines.append(f"  Trigger type: {row['trigger_type']}")
-            lines.append(f"  Paused:       {row['paused']}")
+                lines = [f"Schedule for job {job_id}:"]
+                lines.append(f"  Trigger type: {row['trigger_type']}")
+                lines.append(f"  Paused:       {row['paused']}")
 
-            if row["cron"]:
-                lines.append(f"  Cron:         {row['cron']}")
-                lines.append(f"  Timezone:     {row['timezone']}")
+                if row["cron"]:
+                    lines.append(f"  Cron:         {row['cron']}")
+                    lines.append(f"  Timezone:     {row['timezone']}")
 
-            if row["periodic_interval"]:
-                lines.append(
-                    f"  Every: {row['periodic_interval']} {row['periodic_units']}"
-                )
+                if row["periodic_interval"]:
+                    lines.append(
+                        f"  Every: {row['periodic_interval']} {row['periodic_units']}"
+                    )
 
-            return "\n".join(lines)
+                return "\n".join(lines)
+            except Exception as e:
+                return f"Error getting job schedule: {str(e)}"
 
         # ── Tool 9 — get_table_lineage ────────────────────────────
         @tool
@@ -363,34 +382,37 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
             Args:
                 job_id: the Databricks job ID
             """
-            rows = spark.table("system.access.table_lineage") \
-                        .filter(F.col("entity_type") == "JOB") \
-                        .filter(
-                            F.col("entity_metadata.job_info.job_id") == job_id
-                        ) \
-                        .select(
-                            "source_table_full_name",
-                            "target_table_full_name",
-                            "created_by",
-                            "event_date"
-                        ) \
-                        .distinct() \
-                        .orderBy(F.col("event_date").desc()) \
-                        .collect()
+            try:
+                rows = spark.table("system.access.table_lineage") \
+                            .filter(F.col("entity_type") == "JOB") \
+                            .filter(
+                                F.col("entity_metadata.job_info.job_id") == job_id
+                            ) \
+                            .select(
+                                "source_table_full_name",
+                                "target_table_full_name",
+                                "created_by",
+                                "event_date"
+                            ) \
+                            .distinct() \
+                            .orderBy(F.col("event_date").desc()) \
+                            .collect()
 
-            if not rows:
-                return f"No lineage found for job ID '{job_id}'"
+                if not rows:
+                    return f"No lineage found for job ID '{job_id}'"
 
-            lines = [f"Table lineage for job {job_id}:\n"]
-            for row in rows:
-                lines.append(
-                    f"  Source: {row['source_table_full_name'] or 'N/A'} → "
-                    f"Target: {row['target_table_full_name'] or 'N/A'} | "
-                    f"By: {row['created_by']} | "
-                    f"Date: {row['event_date']}"
-                )
+                lines = [f"Table lineage for job {job_id}:\n"]
+                for row in rows:
+                    lines.append(
+                        f"  Source: {row['source_table_full_name'] or 'N/A'} → "
+                        f"Target: {row['target_table_full_name'] or 'N/A'} | "
+                        f"By: {row['created_by']} | "
+                        f"Date: {row['event_date']}"
+                    )
 
-            return "\n".join(lines)
+                return "\n".join(lines)
+            except Exception as e:
+                return f"Error getting table lineage: {str(e)}"
 
         # ── Memory ────────────────────────────────────────────────
         memory = MemorySaver()
@@ -409,10 +431,21 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
                 get_job_schedule,
                 get_table_lineage
             ],
-            checkpointer=memory
+            checkpointer=memory,
+            state_modifier="""You are a Databricks governance expert.
+You have access to tools to look up job information.
+Always use tools to find information — never guess.
+Use tools one at a time and wait for the result.
+When you have the answer summarise it clearly.
+If a question needs multiple tools use them in sequence."""
         )
 
     def predict(self, context, model_input: pd.DataFrame) -> list:
+        """
+        Called on every inference request.
+        Expects DataFrame with columns: question, thread_id
+        Returns list of answers.
+        """
         results = []
 
         for i, row in model_input.iterrows():
@@ -420,12 +453,15 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
             thread_id = row.get("thread_id", "default")
             config    = {"configurable": {"thread_id": thread_id}}
 
-            response  = self.agent.invoke(
-                {"messages": [{"role": "user", "content": question}]},
-                config=config
-            )
+            try:
+                response = self.agent.invoke(
+                    {"messages": [{"role": "user", "content": question}]},
+                    config=config
+                )
+                results.append(response["messages"][-1].content)
 
-            results.append(response["messages"][-1].content)
+            except Exception as e:
+                results.append(f"Error: {str(e)}")
 
         return results
 
