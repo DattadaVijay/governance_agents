@@ -9,13 +9,8 @@ resources:
             entity_version: "1"
             scale_to_zero_enabled: true
             workload_size: "Small"
-        
-        auto_capture_config:
-          catalog_name: "governance"
-          schema_name:  "default"
-          table_name_prefix: "governance_agent_inference"
 
-      environment_vars:
+      env_vars:
         - name:  "GROQ_API_KEY"
           value: "{{secrets/agents_scope/grok_key}}"
 
