@@ -121,22 +121,21 @@ model = mlflow.pyfunc.load_model(
 
 print("✅ Model loaded")
 
-# ── Single question test ──────────────────────────────────────────
-test_df = pd.DataFrame({
-    "question":  ["What jobs failed in the last 24 hours?"],
-    "thread_id": ["test_session_001"]
-})
+# ── Test questions ────────────────────────────────────────────────
+questions = [
+    ("What is the job ID of dev_dattada_vijayyml_job_deploy?",   "session_001"),
+    ("Who created job 780838995876631?",                          "session_001"),
+    ("What is the status of job 780838995876631?",                "session_001"),
+    ("Show me the last 3 runs of job 780838995876631?",           "session_001"),
+    ("What tasks does job 780838995876631 have?",                 "session_001"),
+]
 
-result = model.predict(test_df)
-print(f"\nQ: {test_df['question'][0]}")
-print(f"A: {result[0]}")
-
-# ── Multi turn test — same thread_id ─────────────────────────────
-test_df2 = pd.DataFrame({
-    "question":  ["Can you tell me more about the first one?"],
-    "thread_id": ["test_session_001"]    # same session — agent remembers
-})
-
-result2 = model.predict(test_df2)
-print(f"\nQ: {test_df2['question'][0]}")
-print(f"A: {result2[0]}")
+for question, thread_id in questions:
+    test_df = pd.DataFrame({
+        "question":  [question],
+        "thread_id": [thread_id]
+    })
+    result = model.predict(test_df)
+    print(f"\nQ: {question}")
+    print(f"A: {result[0]}")
+    print("-" * 60)
