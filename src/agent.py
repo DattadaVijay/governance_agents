@@ -412,12 +412,7 @@ class DataGovernanceAgent(mlflow.pyfunc.PythonModel):
             checkpointer=memory
         )
 
-    def predict(self, context, model_input):
-        """
-        Called on every inference request.
-        Expects DataFrame with columns: question, thread_id
-        Returns list of answers.
-        """
+    def predict(self, context, model_input: pd.DataFrame) -> list:
         results = []
 
         for i, row in model_input.iterrows():

@@ -18,7 +18,7 @@ MODEL_NAME = f"{CATALOG}.{SCHEMA}.data_governance_agent"
 AGENT_PATH = "./agent.py"
 
 # ── Set GROQ key so load_context works during local test ──────────
-os.environ["GROQ_API_KEY"] = dbutils.secrets.get("agents_scope", "groq_api_key")
+os.environ["GROQ_API_KEY"] = dbutils.secrets.get("agents_scope", "grok_key")
 
 # COMMAND ----------
 
